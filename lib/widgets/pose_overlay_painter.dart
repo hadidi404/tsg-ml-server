@@ -58,7 +58,7 @@ class PoseOverlayPainter extends CustomPainter {
     }
   }
 
-  void _drawLine(Canvas canvas, Size size, dynamic? point1, dynamic? point2, Paint paint) {
+  void _drawLine(Canvas canvas, Size size, dynamic point1, dynamic point2, Paint paint) {
     if (point1 == null || point2 == null) return;
     
     final p1 = point1 as Map<String, dynamic>;
@@ -72,7 +72,7 @@ class PoseOverlayPainter extends CustomPainter {
     canvas.drawLine(offset1, offset2, paint);
   }
 
-  void _drawJoint(Canvas canvas, Size size, dynamic? point, Color color, Paint paint) {
+  void _drawJoint(Canvas canvas, Size size, dynamic point, Color color, Paint paint) {
     if (point == null) return;
     
     final p = point as Map<String, dynamic>;

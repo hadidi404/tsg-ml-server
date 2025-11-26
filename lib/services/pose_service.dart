@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -7,7 +6,6 @@ import '../models/pose_evaluation.dart';
 
 class PoseService extends ChangeNotifier {
   // TODO: Change this to your backend server IP address
-  // Example: 'http://192.168.1.100:8000' or 'http://YOUR_LAPTOP_IP:8000'
   static const String baseUrl = 'http://192.168.0.237:8000';
   static const String wsUrl = 'ws://192.168.0.237:8000';
   
@@ -79,43 +77,6 @@ class PoseService extends ChangeNotifier {
     _isConnected = false;
     _currentEvaluation = null;
     notifyListeners();
-  }
-
-  /// Evaluate a static image
-  Future<PoseEvaluation?> evaluateImage(Uint8List imageBytes) async {
-    try {
-      _errorMessage = null;
-      notifyListeners();
-
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$baseUrl/api/evaluate-image'),
-      );
-      
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'file',
-          imageBytes,
-          filename: 'pose.jpg',
-        ),
-      );
-
-      final response = await request.send();
-      final responseData = await response.stream.bytesToString();
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(responseData);
-        return PoseEvaluation.fromJson(data);
-      } else {
-        _errorMessage = 'Server error: ${response.statusCode}';
-        notifyListeners();
-        return null;
-      }
-    } catch (e) {
-      _errorMessage = 'Error: $e. Make sure backend is running!';
-      notifyListeners();
-      return null;
-    }
   }
 
   /// Check if backend is online
