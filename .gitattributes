@@ -1,22 +1,19 @@
-# Override GitHub language detection
-# Exclude auto-generated Flutter platform code from language statistics
+# Mark auto-generated Flutter platform code as vendored
+# This prevents it from skewing language statistics when you add Dart code
 
-# Linux platform code
-linux/** linguist-vendored
-# Windows platform code  
-windows/** linguist-vendored
-# macOS platform code
-macos/** linguist-vendored
-# iOS platform code
-ios/** linguist-vendored
-# Android platform code (except custom code)
-android/** linguist-vendored
-# Web platform code
-web/** linguist-vendored
+# Auto-generated Flutter runners (don't edit these manually)
+linux/flutter/** linguist-vendored
+windows/flutter/** linguist-vendored
+macos/Flutter/** linguist-vendored
+macos/Runner/GeneratedPluginRegistrant.* linguist-vendored
+ios/Flutter/** linguist-vendored
+ios/Runner/GeneratedPluginRegistrant.* linguist-vendored
+android/app/src/main/java/**/GeneratedPluginRegistrant.* linguist-vendored
+web/flutter_bootstrap.js linguist-vendored
 
 # Build outputs
 build/** linguist-generated
 .dart_tool/** linguist-generated
 
-# Mark Dart as the primary language
-*.dart linguist-language=Dart
+# Your Dart code (what you actually write)
+*.dart linguist-language=Dart linguist-detectable=true
