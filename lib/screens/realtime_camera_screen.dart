@@ -18,10 +18,12 @@ class _RealtimeCameraScreenState extends State<RealtimeCameraScreen> {
   List<CameraDescription>? _cameras;
   bool _isProcessing = false;
   Timer? _frameTimer;
+  PoseService? _poseService;
 
   @override
   void initState() {
     super.initState();
+    // Lock to landscape orientation
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeRight,
       DeviceOrientation.landscapeLeft,
@@ -32,14 +34,20 @@ class _RealtimeCameraScreenState extends State<RealtimeCameraScreen> {
     });
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _poseService = context.read<PoseService>();
+  }
+
   Future<void> _initializeCamera() async {
     try {
       _cameras = await availableCameras();
       if (_cameras!.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No cameras available')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('No cameras available')));
         }
         return;
       }
@@ -77,7 +85,9 @@ class _RealtimeCameraScreenState extends State<RealtimeCameraScreen> {
   }
 
   void _startFrameProcessing() {
-    _frameTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) async {
+    _frameTimer = Timer.periodic(const Duration(milliseconds: 100), (
+      timer,
+    ) async {
       if (_isProcessing ||
           _cameraController == null ||
           !_cameraController!.value.isInitialized) {
@@ -103,7 +113,8 @@ class _RealtimeCameraScreenState extends State<RealtimeCameraScreen> {
   void dispose() {
     _frameTimer?.cancel();
     _cameraController?.dispose();
-    context.read<PoseService>().disconnect();
+    _poseService?.disconnect();
+    // Restore orientation
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
@@ -117,232 +128,292 @@ class _RealtimeCameraScreenState extends State<RealtimeCameraScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('Real-time Pose Evaluation'),
-        actions: [
-          Consumer<PoseService>(
-            builder: (context, service, _) {
-              return Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: service.isConnected ? Colors.green : Colors.red,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      service.isConnected ? 'CONNECTED' : 'OFFLINE',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
       body: _cameraController == null || !_cameraController!.value.isInitialized
           ? const Center(child: CircularProgressIndicator())
-          : Row(
+          : Column(
               children: [
-                // Camera preview (70%)
-                Expanded(
-                  flex: 7,
-                  child: Center(
-                    child: AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: Stack(
-                        fit: StackFit.expand,
+                // Feature scores bar at top
+                Consumer<PoseService>(
+                  builder: (context, service, _) {
+                    final evaluation = service.currentEvaluation;
+
+                    return Container(
+                      width: double.infinity,
+                      color: Colors.black87,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Row(
                         children: [
-                          ClipRect(
-                            child: OverflowBox(
-                              alignment: Alignment.center,
-                              child: FittedBox(
-                                fit: BoxFit.cover,
-                                child: SizedBox(
-                                  width: _cameraController!.value.previewSize!.height,
-                                  height: _cameraController!.value.previewSize!.width,
-                                  child: CameraPreview(_cameraController!),
+                          // Connection status indicator
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: service.isConnected
+                                  ? Colors.green
+                                  : Colors.red,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  service.isConnected
+                                      ? Icons.wifi
+                                      : Icons.wifi_off,
+                                  color: Colors.white,
+                                  size: 14,
                                 ),
-                              ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  service.isConnected ? 'LIVE' : 'OFFLINE',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
+                          const SizedBox(width: 12),
 
-                          // Pose overlay
-                          Consumer<PoseService>(
-                            builder: (context, service, _) {
-                              final evaluation = service.currentEvaluation;
-                              return CustomPaint(
-                                painter: PoseOverlayPainter(evaluation),
-                                child: Container(),
-                              );
-                            },
+                          // Feature scores (keep Expanded always so close button stays right)
+                          Expanded(
+                            child: (evaluation != null && evaluation.isComplete)
+                                ? Wrap(
+                                    spacing: 6,
+                                    runSpacing: 6,
+                                    children: evaluation.featureScores.entries.map((
+                                      entry,
+                                    ) {
+                                      final score = entry.value;
+                                      final color = score > 80
+                                          ? Colors.green
+                                          : score > 50
+                                          ? Colors.yellow
+                                          : Colors.red;
+
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: color.withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          border: Border.all(
+                                            color: color,
+                                            width: 1,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '${entry.key}: ${score.toStringAsFixed(0)}%',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: color,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  )
+                                : const SizedBox(),
+                          ),
+
+                          // Back button
+                          IconButton(
+                            icon: const Icon(Icons.close, color: Colors.white),
+                            onPressed: () => Navigator.pop(context),
+                            iconSize: 20,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
                           ),
                         ],
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
 
-                // Feedback panel (30%)
+                // Main content
                 Expanded(
-                  flex: 3,
-                  child: Container(
-                    width: double.infinity,
-                    color: Colors.black87,
-                    padding: const EdgeInsets.all(16),
-                    child: Consumer<PoseService>(
-                      builder: (context, service, _) {
-                        final evaluation = service.currentEvaluation;
-
-                        if (evaluation == null) {
-                          return const Center(
-                            child: Text(
-                              'Waiting for pose detection...',
-                              style: TextStyle(
-                                color: Colors.yellow,
-                                fontSize: 16,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          );
-                        }
-
-                        if (!evaluation.isComplete) {
-                          return Center(
-                            child: Text(
-                              evaluation.message ?? 'No pose detected',
-                              style: const TextStyle(
-                                color: Colors.orange,
-                                fontSize: 16,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          );
-                        }
-
-                        return SingleChildScrollView(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // ML Score
-                              Row(
-                                children: [
-                                  const Text(
-                                    'ML Score: ',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Text(
-                                    '${evaluation.mlScore.toStringAsFixed(0)}%',
-                                    style: TextStyle(
-                                      color: evaluation.scoreColor,
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-
-                              if (evaluation.feedback.isNotEmpty) ...[
-                                const SizedBox(height: 12),
-                                const Text(
-                                  'Suggestions:',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
+                  child: Row(
+                    children: [
+                      // Camera preview (70%)
+                      Expanded(
+                        flex: 7,
+                        child: Center(
+                          child: AspectRatio(
+                            aspectRatio: 16 / 9,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                FittedBox(
+                                  fit: BoxFit.contain,
+                                  child: SizedBox(
+                                    width: _cameraController!
+                                        .value
+                                        .previewSize!
+                                        .width,
+                                    height: _cameraController!
+                                        .value
+                                        .previewSize!
+                                        .height,
+                                    child: CameraPreview(_cameraController!),
                                   ),
                                 ),
-                                const SizedBox(height: 8),
-                                ...evaluation.feedback.map(
-                                  (fb) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 6),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+
+                                // Pose overlay
+                                Consumer<PoseService>(
+                                  builder: (context, service, _) {
+                                    final evaluation =
+                                        service.currentEvaluation;
+                                    return CustomPaint(
+                                      painter: PoseOverlayPainter(evaluation),
+                                      child: Container(),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // Feedback panel (30%)
+                      Expanded(
+                        flex: 3,
+                        child: Container(
+                          width: double.infinity,
+                          color: Colors.black87,
+                          padding: const EdgeInsets.all(16),
+                          child: Consumer<PoseService>(
+                            builder: (context, service, _) {
+                              final evaluation = service.currentEvaluation;
+
+                              if (evaluation == null) {
+                                return const Center(
+                                  child: Text(
+                                    'Waiting for pose detection...',
+                                    style: TextStyle(
+                                      color: Colors.yellow,
+                                      fontSize: 16,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                );
+                              }
+
+                              if (!evaluation.isComplete) {
+                                return Center(
+                                  child: Text(
+                                    evaluation.message ?? 'No pose detected',
+                                    style: const TextStyle(
+                                      color: Colors.orange,
+                                      fontSize: 16,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                );
+                              }
+
+                              return SingleChildScrollView(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // ML Score
+                                    Row(
                                       children: [
                                         const Text(
-                                          '• ',
+                                          'ML Score: ',
                                           style: TextStyle(
-                                            color: Colors.redAccent,
-                                            fontSize: 16,
+                                            color: Colors.white,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
                                           ),
                                         ),
-                                        Expanded(
-                                          child: Text(
-                                            fb,
-                                            style: const TextStyle(
-                                              color: Colors.redAccent,
-                                              fontSize: 14,
-                                            ),
+                                        Text(
+                                          '${evaluation.mlScore.toStringAsFixed(0)}%',
+                                          style: TextStyle(
+                                            color: evaluation.scoreColor,
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.bold,
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ),
+
+                                    if (evaluation.feedback.isNotEmpty) ...[
+                                      const SizedBox(height: 12),
+                                      const Text(
+                                        'Suggestions:',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      ...evaluation.feedback.map(
+                                        (fb) => Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 6,
+                                          ),
+                                          child: Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              const Text(
+                                                '• ',
+                                                style: TextStyle(
+                                                  color: Colors.redAccent,
+                                                  fontSize: 16,
+                                                ),
+                                              ),
+                                              Expanded(
+                                                child: Text(
+                                                  fb,
+                                                  style: const TextStyle(
+                                                    color: Colors.redAccent,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ] else
+                                      const Padding(
+                                        padding: EdgeInsets.only(top: 8),
+                                        child: Text(
+                                          '✓ Great form! Keep it up!',
+                                          style: TextStyle(
+                                            color: Colors.greenAccent,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+
+                                    const SizedBox(height: 16),
+                                    const Divider(color: Colors.white30),
+                                    const SizedBox(height: 8),
+                                  ],
                                 ),
-                              ] else
-                                const Padding(
-                                  padding: EdgeInsets.only(top: 8),
-                                  child: Text(
-                                    '✓ Great form! Keep it up!',
-                                    style: TextStyle(
-                                      color: Colors.greenAccent,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-
-                              const SizedBox(height: 16),
-                              const Divider(color: Colors.white30),
-                              const SizedBox(height: 8),
-
-                              // Feature scores
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 6,
-                                children: evaluation.featureScores.entries.map((
-                                  entry,
-                                ) {
-                                  final score = entry.value;
-                                  final color = score > 80
-                                      ? Colors.green
-                                      : score > 50
-                                      ? Colors.yellow
-                                      : Colors.red;
-
-                                  return Chip(
-                                    label: Text(
-                                      '${entry.key}: ${score.toStringAsFixed(0)}%',
-                                      style: const TextStyle(fontSize: 11),
-                                    ),
-                                    backgroundColor: color.withOpacity(0.3),
-                                    side: BorderSide(color: color, width: 1),
-                                    padding: EdgeInsets.zero,
-                                    materialTapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                  );
-                                }).toList(),
-                              ),
-                            ],
+                              );
+                            },
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'services/pose_service.dart';
 import 'screens/realtime_camera_screen.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Set immersive mode for entire app
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   runApp(
     ChangeNotifierProvider(create: (_) => PoseService(), child: const MyApp()),
   );
@@ -15,6 +19,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'TSG Pose Evaluator',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
@@ -77,18 +82,11 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.videocam,
-              size: 100,
-              color: Colors.blue,
-            ),
+            const Icon(Icons.videocam, size: 100, color: Colors.blue),
             const SizedBox(height: 24),
             const Text(
               'Real-time Pose Evaluation',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             const Padding(
@@ -96,10 +94,7 @@ class _HomePageState extends State<HomePage> {
               child: Text(
                 'Get instant feedback on your armwrestling form with live pose analysis',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
+                style: TextStyle(fontSize: 16, color: Colors.grey),
               ),
             ),
             const SizedBox(height: 32),
